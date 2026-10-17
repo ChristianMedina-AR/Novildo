@@ -131,3 +131,14 @@ Con el ejecutor integrado de Python:
 ```bash
 python3 -m unittest discover tests
 ```
+
+---
+
+## Licencia y Declaración de IA
+
+Este proyecto es software libre y abierto publicado en el dominio público bajo **[The Unlicense](LICENSE)**:
+- **Sin obligación de atribución:** No se requiere dar créditos ni atribuir autoría para utilizar, copiar, modificar, fusionar o distribuir el software.
+- **Desarrollo asistido por IA:** Concebido y programado en colaboración con el asistente de codificación **Antigravity** (Google DeepMind) utilizando la familia de modelos **Gemini**.
+- **Fuentes y originalidad:** Desarrollado desde cero apoyándose exclusivamente en la biblioteca estándar oficial de Python 3, sin reutilización ni copia de código propietario o restringido de terceros.
+
+Para ver el texto completo y las notas legales, consulta el archivo [LICENSE](LICENSE).
