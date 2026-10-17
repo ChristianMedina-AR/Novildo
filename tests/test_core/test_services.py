@@ -77,6 +77,23 @@ class TestTimelineService(unittest.TestCase):
         self.assertEqual(timeline[3].memory.year, 2020)
         self.assertEqual(timeline[3].memory.month, 12)
 
+    def test_get_timeline_filtered_by_year(self):
+        self.service.register_memory(year=2015, description="Memoria 2015")
+        self.service.register_memory(year=2020, month=3, description="Memoria Marzo 2020")
+        self.service.register_memory(year=2020, month=8, description="Memoria Agosto 2020")
+        self.service.register_memory(year=2024, description="Memoria 2024")
+
+        # Filtrar por año 2020
+        timeline_2020 = self.service.get_timeline(year=2020)
+        self.assertEqual(len(timeline_2020), 2)
+        self.assertTrue(all(e.memory.year == 2020 for e in timeline_2020))
+        self.assertEqual(timeline_2020[0].memory.description, "Memoria Marzo 2020")
+        self.assertEqual(timeline_2020[1].memory.description, "Memoria Agosto 2020")
+
+        # Filtrar por año sin recuerdos
+        timeline_empty = self.service.get_timeline(year=1999)
+        self.assertEqual(timeline_empty, [])
+
     def test_sorting_same_year_none_month_placed_last_for_coherent_age(self):
         # Nacimiento: Mayo 1994 (mes 5)
         self.service.update_profile(birth_year=1994, birth_month=5)
@@ -156,6 +173,233 @@ class TestTimelineService(unittest.TestCase):
         self.assertEqual(deleted.id, mem.id)
         with self.assertRaises(NotFoundError):
             self.service.get_memory(mem.id)
+
+    def test_tag_lifecycle_and_auto_increment(self):
+        # Primer tag debe tener ID 1
+        t1 = self.service.register_tag("Estudios", emoji="🎓")
+        self.assertEqual(t1.id, 1)
+        self.assertEqual(t1.name, "Estudios")
+        self.assertEqual(t1.emoji, "🎓")
+
+        # Segundo tag debe tener ID 2
+        t2 = self.service.register_tag("Trabajo", emoji="💼")
+        self.assertEqual(t2.id, 2)
+
+        # Tercer tag debe tener ID 3
+        t3 = self.service.register_tag("Personal")
+        self.assertEqual(t3.id, 3)
+        self.assertIsNone(t3.emoji)
+
+        tags = self.service.get_tags()
+        self.assertEqual(len(tags), 3)
+        self.assertEqual([t.id for t in tags], [1, 2, 3])
+
+        # Obtener por ID
+        self.assertEqual(self.service.get_tag(1).name, "Estudios")
+        with self.assertRaises(NotFoundError):
+            self.service.get_tag(999)
+
+    def test_tag_duplicate_name_rejected(self):
+        self.service.register_tag("Estudios", emoji="🎓")
+        with self.assertRaises(ValidationError):
+            self.service.register_tag("estudios")
+        with self.assertRaises(ValidationError):
+            self.service.register_tag("  Estudios  ")
+
+    def test_tag_empty_name_rejected(self):
+        with self.assertRaises(ValidationError):
+            self.service.register_tag("")
+        with self.assertRaises(ValidationError):
+            self.service.register_tag("   ")
+
+    def test_register_memory_with_tag(self):
+        tag = self.service.register_tag("Estudios", emoji="🎓")
+        mem = self.service.register_memory(year=2024, description="Graduación", tag_id=tag.id)
+        self.assertEqual(mem.tag_id, 1)
+
+        # Tag inexistente
+        with self.assertRaises(NotFoundError):
+            self.service.register_memory(year=2024, description="Falla", tag_id=99)
+
+    def test_update_memory_tag_and_clear_tag(self):
+        t1 = self.service.register_tag("Estudios", emoji="🎓")
+        t2 = self.service.register_tag("Trabajo", emoji="💼")
+        mem = self.service.register_memory(year=2024, description="Inicio", tag_id=t1.id)
+
+        # Cambiar a t2
+        updated = self.service.update_memory(mem.id, tag_id=t2.id)
+        self.assertEqual(updated.tag_id, t2.id)
+
+        # Limpiar tag
+        cleared = self.service.update_memory(mem.id, clear_tag=True)
+        self.assertIsNone(cleared.tag_id)
+
+    def test_get_timeline_filtered_by_tag(self):
+        t1 = self.service.register_tag("Estudios", emoji="🎓")
+        t2 = self.service.register_tag("Viajes", emoji="✈️")
+
+        self.service.register_memory(year=2018, description="Primaria", tag_id=t1.id)
+        self.service.register_memory(year=2019, description="Viaje a Bariloche", tag_id=t2.id)
+        self.service.register_memory(year=2022, description="Secundaria", tag_id=t1.id)
+        self.service.register_memory(year=2023, description="Sin tag")
+
+        # Filtrar por tag 1 (Estudios)
+        timeline_t1 = self.service.get_timeline(tag_id=t1.id)
+        self.assertEqual(len(timeline_t1), 2)
+        self.assertEqual(timeline_t1[0].memory.description, "Primaria")
+        self.assertIsNotNone(timeline_t1[0].tag)
+        self.assertEqual(timeline_t1[0].tag.name, "Estudios")
+        self.assertEqual(timeline_t1[1].memory.description, "Secundaria")
+
+        # Filtrar por tag 2 (Viajes)
+        timeline_t2 = self.service.get_timeline(tag_id=t2.id)
+        self.assertEqual(len(timeline_t2), 1)
+        self.assertEqual(timeline_t2[0].memory.description, "Viaje a Bariloche")
+
+    def test_delete_tag_cascade_unsets_memory_tag_id(self):
+        t = self.service.register_tag("Hobbies", emoji="🎨")
+        m = self.service.register_memory(year=2021, description="Pintura", tag_id=t.id)
+
+        deleted = self.service.delete_tag(t.id)
+        self.assertEqual(deleted.id, t.id)
+        with self.assertRaises(NotFoundError):
+            self.service.get_tag(t.id)
+
+        reloaded_m = self.service.get_memory(m.id)
+        self.assertIsNone(reloaded_m.tag_id)
+
+    def test_person_crud(self):
+        p1 = self.service.register_person("Ana Gómez", birth_year=1995, birth_month=4)
+        p2 = self.service.register_person("Carlos Ruiz")
+
+        self.assertEqual(p1.id, 1)
+        self.assertEqual(p2.id, 2)
+
+        persons = self.service.get_persons()
+        self.assertEqual(len(persons), 2)
+        self.assertEqual(persons[0].name, "Ana Gómez")
+        self.assertEqual(persons[1].name, "Carlos Ruiz")
+
+        retrieved = self.service.get_person(1)
+        self.assertEqual(retrieved.name, "Ana Gómez")
+
+        with self.assertRaises(NotFoundError):
+            self.service.get_person(999)
+
+    def test_person_validation(self):
+        self.service.register_person("Martín Silva")
+        with self.assertRaises(ValidationError):
+            self.service.register_person("martín silva")
+        with self.assertRaises(ValidationError):
+            self.service.register_person("   ")
+
+    def test_register_memory_with_persons(self):
+        p1 = self.service.register_person("Juan Pérez", birth_year=1990, birth_month=5)
+        p2 = self.service.register_person("María López", birth_year=1995, birth_month=10)
+
+        mem = self.service.register_memory(
+            year=2020,
+            month=6,
+            description="Viaje juntos",
+            person_ids=[p1.id, p2.id],
+        )
+        self.assertEqual(mem.person_ids, [1, 2])
+
+        # Persona inexistente
+        with self.assertRaises(NotFoundError):
+            self.service.register_memory(year=2020, description="Error", person_ids=[99])
+
+    def test_get_timeline_person_age_calculation(self):
+        # Juan: nacido en Mayo (5) de 1990
+        p1 = self.service.register_person("Juan Pérez", birth_year=1990, birth_month=5)
+        # María: sin fecha de nacimiento
+        p2 = self.service.register_person("María López")
+
+        # Evento en Abril (4) de 2020 (antes de su cumpleaños en mayo) -> Juan tiene 29 años
+        mem1 = self.service.register_memory(
+            year=2020,
+            month=4,
+            description="Concierto",
+            person_ids=[p1.id, p2.id],
+        )
+        # Evento en Junio (6) de 2020 (después de su cumpleaños en mayo) -> Juan tiene 30 años
+        mem2 = self.service.register_memory(
+            year=2020,
+            month=6,
+            description="Fiesta",
+            person_ids=[p1.id],
+        )
+
+        timeline = self.service.get_timeline(ascending=True)
+        self.assertEqual(len(timeline), 2)
+
+        # Primer recuerdo: Juan tiene 29, María tiene None
+        entry1 = timeline[0]
+        self.assertEqual(len(entry1.people), 2)
+        self.assertEqual(entry1.people[0].person.name, "Juan Pérez")
+        self.assertEqual(entry1.people[0].age, 29)
+        self.assertEqual(entry1.people[1].person.name, "María López")
+        self.assertIsNone(entry1.people[1].age)
+
+        # Segundo recuerdo: Juan tiene 30
+        entry2 = timeline[1]
+        self.assertEqual(len(entry2.people), 1)
+        self.assertEqual(entry2.people[0].person.name, "Juan Pérez")
+        self.assertEqual(entry2.people[0].age, 30)
+
+    def test_get_timeline_filtered_by_person(self):
+        p1 = self.service.register_person("Persona 1")
+        p2 = self.service.register_person("Persona 2")
+
+        self.service.register_memory(year=2018, description="Solo con P1", person_ids=[p1.id])
+        self.service.register_memory(year=2019, description="Con ambos", person_ids=[p1.id, p2.id])
+        self.service.register_memory(year=2020, description="Solo con P2", person_ids=[p2.id])
+        self.service.register_memory(year=2021, description="Sin personas")
+
+        # Filtrar por p1
+        t_p1 = self.service.get_timeline(person_id=p1.id)
+        self.assertEqual(len(t_p1), 2)
+        self.assertEqual(t_p1[0].memory.description, "Solo con P1")
+        self.assertEqual(t_p1[1].memory.description, "Con ambos")
+
+        # Filtrar por p2
+        t_p2 = self.service.get_timeline(person_id=p2.id)
+        self.assertEqual(len(t_p2), 2)
+        self.assertEqual(t_p2[0].memory.description, "Con ambos")
+        self.assertEqual(t_p2[1].memory.description, "Solo con P2")
+
+    def test_update_memory_persons_and_clear_people(self):
+        p1 = self.service.register_person("Persona 1")
+        p2 = self.service.register_person("Persona 2")
+        mem = self.service.register_memory(year=2024, description="Reunión", person_ids=[p1.id])
+
+        # Actualizar personas
+        updated = self.service.update_memory(mem.id, person_ids=[p2.id])
+        self.assertEqual(updated.person_ids, [p2.id])
+
+        # Limpiar personas
+        cleared = self.service.update_memory(mem.id, clear_people=True)
+        self.assertEqual(cleared.person_ids, [])
+
+    def test_delete_person_cascade(self):
+        p = self.service.register_person("Amigo")
+        m = self.service.register_memory(year=2022, description="Salida", person_ids=[p.id])
+
+        deleted = self.service.delete_person(p.id)
+        self.assertEqual(deleted.id, p.id)
+        with self.assertRaises(NotFoundError):
+            self.service.get_person(p.id)
+
+        reloaded = self.service.get_memory(m.id)
+        self.assertEqual(reloaded.person_ids, [])
+
+    def test_get_people_in_memory(self):
+        p = self.service.register_person("Laura", birth_year=1990, birth_month=1)
+        m = self.service.register_memory(year=2010, month=1, description="Evento", person_ids=[p.id])
+        people = self.service.get_people_in_memory(m)
+        self.assertEqual(len(people), 1)
+        self.assertEqual(people[0].person.name, "Laura")
+        self.assertEqual(people[0].age, 20)
 
 
 if __name__ == "__main__":

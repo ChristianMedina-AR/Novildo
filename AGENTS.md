@@ -26,6 +26,20 @@
    - Criterio ascendente (de menor a mayor): primero por `year`, luego por `month` (los registros con mes `None` se ubican al final del año de forma consistente).
 5. **Persistencia inicial:**
    - Guardado local simple desacoplado mediante un repositorio (JSON o SQLite local en formato estándar), administrado por una interfaz o servicio en `core/storage.py`.
+6. **Modelo de Etiqueta (`Tag`) y Categorización:**
+   - `id` (int, obligatorio): Identificador autoincremental único comenzando en 1 hacia adelante (1, 2, 3...).
+   - `name` (str, obligatorio): Nombre descriptivo de la etiqueta (único).
+   - `emoji` (Optional[str], opcional): Emote o emoji representativo de la etiqueta.
+   - En `Memory`: campo opcional `tag_id` (Optional[int]) que asocia el evento a una etiqueta existente para visualización y filtrado.
+7. **Modelo de Persona (`Person`) y Vinculación Múltiple:**
+   - `id` (int, obligatorio): Identificador autoincremental único comenzando en 1 hacia adelante (1, 2, 3...).
+   - `name` (str, obligatorio): Nombre y apellido o identificador de la persona.
+   - `birth_year` (Optional[int], opcional): Año de nacimiento de la persona para calcular su edad en eventos.
+   - `birth_month` (Optional[int], opcional, rango 1-12): Mes de nacimiento de la persona para cálculo exacto de edad.
+   - A diferencia de las etiquetas, las personas no poseen emote.
+   - En `Memory`: campo `person_ids` (List[int]) que asocia una o múltiples personas vinculadas al recuerdo.
+   - En la línea de tiempo (`list`) y confirmaciones de creación/edición, se calculan y muestran las edades relativas de cada persona en dicho evento utilizando la misma lógica de cálculo de edad del usuario.
+   - Permite filtrar la línea de tiempo por ID de persona (`list -p <ID>`).
 
 ---
 
@@ -34,7 +48,7 @@
 novildo/
 ├── core/
 │   ├── __init__.py
-│   ├── models.py          # Data classes: Memory, UserProfile
+│   ├── models.py          # Data classes: Memory, UserProfile, Tag, Person
 │   ├── services.py        # Casos de uso: registrar recuerdo, calcular edad, ordenar línea
 │   └── storage.py         # Guardado y carga (JSON/SQLite) sin acoplar a CLI
 ├── interfaces/
