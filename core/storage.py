@@ -10,7 +10,7 @@ from pathlib import Path
 from tempfile import NamedTemporaryFile
 from typing import Union, List
 
-from .models import Memory, UserProfile
+from .models import Memory, UserProfile, Tag, Person
 from .exceptions import StorageError, NotFoundError, AmbiguousIdError
 
 
@@ -50,6 +50,46 @@ class StorageRepository(ABC):
     @abstractmethod
     def save_profile(self, profile: UserProfile) -> None:
         """Guarda o actualiza el perfil del usuario."""
+        pass
+
+    @abstractmethod
+    def get_tags(self) -> List[Tag]:
+        """Obtiene todas las etiquetas almacenadas."""
+        pass
+
+    @abstractmethod
+    def get_tag_by_id(self, tag_id: int) -> Optional[Tag]:
+        """Obtiene una etiqueta por su ID numérico."""
+        pass
+
+    @abstractmethod
+    def add_tag(self, tag: Tag) -> Tag:
+        """Guarda una nueva etiqueta y la retorna."""
+        pass
+
+    @abstractmethod
+    def delete_tag(self, tag_id: int) -> bool:
+        """Elimina una etiqueta por su ID numérico."""
+        pass
+
+    @abstractmethod
+    def get_persons(self) -> List[Person]:
+        """Obtiene todas las personas almacenadas."""
+        pass
+
+    @abstractmethod
+    def get_person_by_id(self, person_id: int) -> Optional[Person]:
+        """Obtiene una persona por su ID numérico."""
+        pass
+
+    @abstractmethod
+    def add_person(self, person: Person) -> Person:
+        """Guarda una nueva persona y la retorna."""
+        pass
+
+    @abstractmethod
+    def delete_person(self, person_id: int) -> bool:
+        """Elimina una persona por su ID numérico."""
         pass
 
 
@@ -92,7 +132,9 @@ class JSONStorage(StorageRepository):
             self.filepath.parent.mkdir(parents=True, exist_ok=True)
             initial_data = {
                 "profile": UserProfile().to_dict(),
-                "memories": []
+                "memories": [],
+                "tags": [],
+                "persons": [],
             }
             self._write_raw(initial_data)
 
@@ -173,13 +215,99 @@ class JSONStorage(StorageRepository):
         data["profile"] = profile.to_dict()
         self._write_raw(data)
 
+    def get_tags(self) -> List[Tag]:
+        data = self._read_raw()
+        raw_tags = data.get("tags", [])
+        return [Tag.from_dict(t) for t in raw_tags]
+
+    def get_tag_by_id(self, tag_id: int) -> Optional[Tag]:
+        tags = self.get_tags()
+        for t in tags:
+            if t.id == tag_id:
+                return t
+        return None
+
+    def add_tag(self, tag: Tag) -> Tag:
+        data = self._read_raw()
+        if "tags" not in data or not isinstance(data["tags"], list):
+            data["tags"] = []
+        data["tags"].append(tag.to_dict())
+        self._write_raw(data)
+        return tag
+
+    def delete_tag(self, tag_id: int) -> bool:
+        data = self._read_raw()
+        raw_tags = data.get("tags", [])
+        target_tag = self.get_tag_by_id(tag_id)
+        if target_tag is None:
+            raise NotFoundError(f"No se encontró ninguna etiqueta con ID {tag_id}.")
+
+        data["tags"] = [t for t in raw_tags if t.get("id") != target_tag.id]
+
+        # Desasociar la etiqueta de los recuerdos que la contenían
+        raw_memories = data.get("memories", [])
+        for m in raw_memories:
+            if m.get("tag_id") == target_tag.id:
+                m["tag_id"] = None
+        data["memories"] = raw_memories
+
+        self._write_raw(data)
+        return True
+
+    def get_persons(self) -> List[Person]:
+        data = self._read_raw()
+        raw_persons = data.get("persons", [])
+        return [Person.from_dict(p) for p in raw_persons]
+
+    def get_person_by_id(self, person_id: int) -> Optional[Person]:
+        persons = self.get_persons()
+        for p in persons:
+            if p.id == person_id:
+                return p
+        return None
+
+    def add_person(self, person: Person) -> Person:
+        data = self._read_raw()
+        if "persons" not in data or not isinstance(data["persons"], list):
+            data["persons"] = []
+        data["persons"].append(person.to_dict())
+        self._write_raw(data)
+        return person
+
+    def delete_person(self, person_id: int) -> bool:
+        data = self._read_raw()
+        raw_persons = data.get("persons", [])
+        target_person = self.get_person_by_id(person_id)
+        if target_person is None:
+            raise NotFoundError(f"No se encontró ninguna persona con ID {person_id}.")
+
+        data["persons"] = [p for p in raw_persons if p.get("id") != target_person.id]
+
+        # Desvincular a la persona de todos los recuerdos que la contenían
+        raw_memories = data.get("memories", [])
+        for m in raw_memories:
+            if "person_ids" in m and isinstance(m["person_ids"], list):
+                m["person_ids"] = [pid for pid in m["person_ids"] if pid != target_person.id]
+        data["memories"] = raw_memories
+
+        self._write_raw(data)
+        return True
+
 
 class InMemoryStorage(StorageRepository):
     """Almacenamiento en memoria volátil, ideal para pruebas unitarias."""
 
-    def __init__(self, profile: UserProfile | None = None, memories: List[Memory] | None = None) -> None:
+    def __init__(
+        self,
+        profile: UserProfile | None = None,
+        memories: List[Memory] | None = None,
+        tags: List[Tag] | None = None,
+        persons: List[Person] | None = None,
+    ) -> None:
         self._profile = profile or UserProfile()
         self._memories: List[Memory] = list(memories) if memories else []
+        self._tags: List[Tag] = list(tags) if tags else []
+        self._persons: List[Person] = list(persons) if persons else []
 
     def get_memories(self) -> List[Memory]:
         return list(self._memories)
@@ -210,3 +338,50 @@ class InMemoryStorage(StorageRepository):
 
     def save_profile(self, profile: UserProfile) -> None:
         self._profile = profile
+
+    def get_tags(self) -> List[Tag]:
+        return list(self._tags)
+
+    def get_tag_by_id(self, tag_id: int) -> Optional[Tag]:
+        for t in self._tags:
+            if t.id == tag_id:
+                return t
+        return None
+
+    def add_tag(self, tag: Tag) -> Tag:
+        self._tags.append(tag)
+        return tag
+
+    def delete_tag(self, tag_id: int) -> bool:
+        target = self.get_tag_by_id(tag_id)
+        if target is None:
+            raise NotFoundError(f"No se encontró ninguna etiqueta con ID {tag_id}.")
+        self._tags = [t for t in self._tags if t.id != target.id]
+        for m in self._memories:
+            if m.tag_id == target.id:
+                m.tag_id = None
+        return True
+
+    def get_persons(self) -> List[Person]:
+        return list(self._persons)
+
+    def get_person_by_id(self, person_id: int) -> Optional[Person]:
+        for p in self._persons:
+            if p.id == person_id:
+                return p
+        return None
+
+    def add_person(self, person: Person) -> Person:
+        self._persons.append(person)
+        return person
+
+    def delete_person(self, person_id: int) -> bool:
+        target = self.get_person_by_id(person_id)
+        if target is None:
+            raise NotFoundError(f"No se encontró ninguna persona con ID {person_id}.")
+        self._persons = [p for p in self._persons if p.id != target.id]
+        for m in self._memories:
+            if target.id in m.person_ids:
+                m.person_ids = [pid for pid in m.person_ids if pid != target.id]
+        return True
+
