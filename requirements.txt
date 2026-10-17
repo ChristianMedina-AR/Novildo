@@ -1,0 +1,8 @@
+# Requerimientos para el entorno de desarrollo y pruebas de Novildo
+# El núcleo y la CLI de Novildo funcionan con la biblioteca estándar de Python (sin dependencias externas obligatorias).
+
+# Herramientas de prueba y calidad de código:
+pytest>=8.0.0
+pytest-cov>=4.1.0
+flake8>=7.0.0
+black>=24.0.0

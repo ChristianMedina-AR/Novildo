@@ -1,0 +1,105 @@
+# ==============================================================================
+# Gitignore para Novildo
+# ==============================================================================
+
+# ------------------------------------------------------------------------------
+# 1. Archivos sensibles, secretos y credenciales (Seguridad)
+# ------------------------------------------------------------------------------
+.env
+.env.*
+*.env
+*.env.local
+secrets.json
+credentials.json
+client_secrets.json
+service-account*.json
+*.pem
+*.key
+*.cert
+*.crt
+*.pfx
+*.p12
+*.id_rsa
+id_rsa*
+*.pub
+
+# ------------------------------------------------------------------------------
+# 2. Datos locales y bases de datos del usuario
+# ------------------------------------------------------------------------------
+*.sqlite
+*.sqlite3
+*.db
+*.db-journal
+*.db-wal
+novildo_data.json
+*.local.json
+/data/
+/storage/
+.novildo/
+
+# ------------------------------------------------------------------------------
+# 3. Python: Archivos compilados y bytecode
+# ------------------------------------------------------------------------------
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+
+# ------------------------------------------------------------------------------
+# 4. Entornos virtuales
+# ------------------------------------------------------------------------------
+.venv/
+venv/
+ENV/
+env/
+env.bak/
+venv.bak/
+
+# ------------------------------------------------------------------------------
+# 5. Pruebas, cobertura y análisis estático
+# ------------------------------------------------------------------------------
+.pytest_cache/
+.coverage
+.coverage.*
+nosetests.xml
+coverage.xml
+htmlcov/
+.mypy_cache/
+.ruff_cache/
+.hypothesis/
+
+# ------------------------------------------------------------------------------
+# 6. Distribución y empaquetado
+# ------------------------------------------------------------------------------
+build/
+dist/
+*.egg-info/
+*.egg
+eggs/
+.eggs/
+wheels/
+develop-eggs/
+
+# ------------------------------------------------------------------------------
+# 7. Registros y logs
+# ------------------------------------------------------------------------------
+*.log
+logs/
+
+# ------------------------------------------------------------------------------
+# 8. Archivos de sistema operativo y editores
+# ------------------------------------------------------------------------------
+.DS_Store
+Thumbs.db
+desktop.ini
+
+# Editores (VS Code, JetBrains)
+.idea/
+.vscode/*
+!.vscode/settings.json
+!.vscode/tasks.json
+!.vscode/launch.json
+!.vscode/extensions.json
+*.swp
+*.swo
+*~
